@@ -1,0 +1,62 @@
+services:
+  rustdesk-ts:
+    image: tailscale/tailscale:latest
+    container_name: ${STACK_NAME}-ts
+    hostname: ${TS_HOSTNAME}
+    environment:
+      - TS_AUTHKEY=${TS_AUTHKEY}
+      - "TS_EXTRA_ARGS=--advertise-tags=tag:container --reset"
+      - TS_STATE_DIR=/var/lib/tailscale
+      - TS_USERSPACE=false
+    volumes:
+      - rustdesk-ts-state:/var/lib/tailscale
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    cap_add:
+      - net_admin
+    ports:
+      # HBBS (ID server) ports
+      - "${RUSTDESK_HBBS_PORT_21114:-21114}:21114/tcp"
+      - "${RUSTDESK_HBBS_PORT_21115:-21115}:21115/tcp"
+      - "${RUSTDESK_HBBS_PORT_21116:-21116}:21116/tcp"
+      - "${RUSTDESK_HBBS_PORT_21116:-21116}:21116/udp"
+      - "${RUSTDESK_HBBS_PORT_21118:-21118}:21118/tcp"
+      # HBBR (Relay server) ports
+      - "${RUSTDESK_HBBR_PORT_21117:-21117}:21117/tcp"
+      - "${RUSTDESK_HBBR_PORT_21119:-21119}:21119/tcp"
+    restart: unless-stopped
+
+  hbbr:
+    image: rustdesk/rustdesk-server-pro:latest
+    container_name: ${STACK_NAME}-hbbr
+    command: hbbr
+    network_mode: service:rustdesk-ts
+    volumes:
+      - rustdesk-data:/root
+    environment:
+      - TZ=${TIMEZONE:-UTC}
+    depends_on:
+      - rustdesk-ts
+    restart: unless-stopped
+
+  hbbs:
+    image: rustdesk/rustdesk-server-pro:latest
+    container_name: ${STACK_NAME}-hbbs
+    command: hbbs
+    network_mode: service:rustdesk-ts
+    volumes:
+      - rustdesk-data:/root
+    environment:
+      - TZ=${TIMEZONE:-UTC}
+    depends_on:
+      - rustdesk-ts
+      - hbbr
+    restart: unless-stopped
+
+volumes:
+  rustdesk-ts-state:
+    name: ${STACK_NAME}-ts-state
+    driver: local
+  rustdesk-data:
+    name: ${STACK_NAME}-data
+    driver: local
